@@ -1,31 +1,121 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>predictionfun</title>
+  <meta charset="UTF-8" />
+  <title>PredictionFun</title>
   <style>
     body {
+      margin: 0;
       font-family: sans-serif;
-      background: linear-gradient(to right, #ffecd2, #fcb69f);
-      text-align: center;
-      margin-top: 50px;
+      background: linear-gradient(135deg, #89f7fe 0%, #66a6ff 100%);
+      color: #333;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
     }
-    h1 {
-      color: #444;
+    header {
+      margin-top: 40px;
+      text-align: center;
+    }
+    h1 { font-size: 3rem; margin: 0; }
+    #root { flex: 1; display: flex; flex-direction: column; width: 100%; max-width: 480px; }
+    .market {
+      background: white;
+      margin: 12px;
+      padding: 16px;
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
     }
     button {
-      background: #4CAF50;
-      color: white;
-      padding: 15px 30px;
-      font-size: 20px;
+      background: #ff7e5f;
       border: none;
-      border-radius: 8px;
+      color: white;
+      padding: 8px 16px;
+      border-radius: 4px;
       cursor: pointer;
+      margin-top: 8px;
+    }
+    input {
+      padding: 8px;
+      width: calc(100% - 16px);
+      margin: 12px 0;
+      border: none;
+      border-radius: 4px;
     }
   </style>
 </head>
 <body>
-  <h1>predictionfun</h1>
-  <p>Type <strong>PROGRESS</strong> to build your future.</p>
-  <button onclick="alert('Progress triggered! 🚀')">PROGRESS</button>
+  <header>
+    <h1>PredictionFun</h1>
+    <p>Make your predictions and watch them live!</p>
+  </header>
+  <div id="root"></div>
+
+  <!-- React & ReactDOM via CDN -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <!-- Socket.IO client via CDN -->
+  <script src="https://cdn.socket.io/4.5.0/socket.io.min.js"></script>
+
+  <script>
+    const { useState, useEffect } = React;
+    const socket = io('https://predictionfun-backend.onrender.com');
+
+    function App() {
+      const [markets, setMarkets] = useState([]);
+      const [title, setTitle] = useState('');
+
+      useEffect(() => {
+        // Fetch existing markets
+        fetch('https://predictionfun-backend.onrender.com/api/markets')
+          .then(r => r.json()).then(setMarkets);
+
+        // Listen for new markets
+        socket.on('new-market', m => setMarkets(ms => [m, ...ms]));
+        // Listen for bets
+        socket.on('bet-placed', ({ marketId, bet }) => {
+          setMarkets(ms => ms.map(m =>
+            m.id === marketId ? { ...m, bets: [...m.bets, bet] } : m
+          ));
+        });
+
+        return () => socket.off();
+      }, []);
+
+      const createMarket = () => {
+        if (!title.trim()) return;
+        fetch('https://predictionfun-backend.onrender.com/api/markets', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ title })
+        }).then(() => setTitle(''));
+      };
+
+      const placeBet = id => {
+        socket.emit('place-bet', { marketId: id, bet: { user: 'You', amount: 1 } });
+      };
+
+      return React.createElement('div', null,
+        React.createElement('input', {
+          placeholder: 'New market title…',
+          value: title,
+          onChange: e => setTitle(e.target.value)
+        }),
+        markets.map(m => 
+          React.createElement('div', { key: m.id, className: 'market' },
+            React.createElement('strong', null, m.title),
+            React.createElement('p', null, m.bets.length + ' bets'),
+            React.createElement('button', { onClick: () => placeBet(m.id) }, 'Bet!')
+          )
+        ),
+        React.createElement('button', { onClick: createMarket }, 'Create Market')
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(
+      React.createElement(App)
+    );
+  </script>
 </body>
 </html>
